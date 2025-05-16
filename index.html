@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>jeanvideo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #181818;
+            color: #fff;
+            margin: 0;
+            padding: 0;
+        }
+        header {
+            background-color: #202020;
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+        }
+        .logo {
+            height: 40px;
+            margin-right: 20px;
+        }
+        .search-bar {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+        }
+        .search-bar input {
+            width: 400px;
+            padding: 8px;
+            border: none;
+            border-radius: 2px 0 0 2px;
+        }
+        .search-bar button {
+            padding: 8px 16px;
+            border: none;
+            background: #323232;
+            color: #fff;
+            border-radius: 0 2px 2px 0;
+            cursor: pointer;
+        }
+        .upload-form {
+            background: #222;
+            padding: 20px;
+            margin: 20px auto;
+            border-radius: 8px;
+            max-width: 400px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .upload-form input[type="file"] {
+            color: #fff;
+        }
+        .upload-form input[type="text"] {
+            padding: 8px;
+            border: none;
+            border-radius: 2px;
+        }
+        .upload-form button {
+            padding: 8px 16px;
+            border: none;
+            background: #cc0000;
+            color: #fff;
+            border-radius: 2px;
+            cursor: pointer;
+        }
+        .videos {
+            display: flex;
+            flex-wrap: wrap;
+            padding: 20px;
+            gap: 20px;
+        }
+        .video {
+            background: #222;
+            border-radius: 8px;
+            width: 320px;
+            overflow: hidden;
+        }
+        .video img, .video video {
+            width: 100%;
+            display: block;
+        }
+        .video-info {
+            padding: 10px;
+        }
+        .video-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin: 0 0 5px 0;
+        }
+        .video-channel {
+            font-size: 14px;
+            color: #aaa;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <img class="logo" src="https://upload.wikimedia.org/wikipedia/commons/b/b8/YouTube_Logo_2017.svg" alt="JeanVideo Logo">
+        <div class="search-bar">
+            <input type="text" placeholder="Buscar">
+            <button>🔍</button>
+        </div>
+    </header>
+    <form class="upload-form" id="uploadForm">
+        <input type="file" id="fileInput" accept="image/*,video/*" required>
+        <input type="text" id="titleInput" placeholder="Título" required>
+        <input type="text" id="channelInput" placeholder="Canal" required>
+        <button type="submit">Subir</button>
+    </form>
+    <main>
+        <div class="videos" id="videosContainer">
+            <div class="video">
+                <img src="https://i.ytimg.com/vi/ysz5S6PUM-U/hqdefault.jpg" alt="Video 1">
+                <div class="video-info">
+                    <div class="video-title">Video de ejemplo 1</div>
+                    <div class="video-channel">Canal de ejemplo</div>
+                </div>
+            </div>
+            <div class="video">
+                <img src="https://i.ytimg.com/vi/3JZ_D3ELwOQ/hqdefault.jpg" alt="Video 2">
+                <div class="video-info">
+                    <div class="video-title">Video de ejemplo 2</div>
+                    <div class="video-channel">Otro canal</div>
+                </div>
+            </div>
+            <div class="video">
+                <img src="https://i.ytimg.com/vi/LXb3EKWsInQ/hqdefault.jpg" alt="Video 3">
+                <div class="video-info">
+                    <div class="video-title">Video de ejemplo 3</div>
+                    <div class="video-channel">Canal de prueba</div>
+                </div>
+            </div>
+        </div>
+    </main>
+    <script>
+        const uploadForm = document.getElementById('uploadForm');
+        const fileInput = document.getElementById('fileInput');
+        const titleInput = document.getElementById('titleInput');
+        const channelInput = document.getElementById('channelInput');
+        const videosContainer = document.getElementById('videosContainer');
+
+        uploadForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const file = fileInput.files[0];
+            const title = titleInput.value;
+            const channel = channelInput.value;
+
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                let mediaElement;
+                if (file.type.startsWith('image/')) {
+                    mediaElement = `<img src="${event.target.result}" alt="${title}">`;
+                } else if (file.type.startsWith('video/')) {
+                    mediaElement = `<video controls src="${event.target.result}"></video>`;
+                } else {
+                    return;
+                }
+
+                const videoDiv = document.createElement('div');
+                videoDiv.className = 'video';
+                videoDiv.innerHTML = `
+                    ${mediaElement}
+                    <div class="video-info">
+                        <div class="video-title">${title}</div>
+                        <div class="video-channel">${channel}</div>
+                    </div>
+                `;
+                videosContainer.prepend(videoDiv);
+                uploadForm.reset();
+            };
+            reader.readAsDataURL(file);
+        });
+    </script>
+</body>
+</html>
