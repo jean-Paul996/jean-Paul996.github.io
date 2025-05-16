@@ -53,7 +53,7 @@
         .upload-form input[type="file"] {
             color: #fff;
         }
-        .upload-form input[type="text"] {
+        .upload-form input[type="text"], .upload-form input[type="password"] {
             padding: 8px;
             border: none;
             border-radius: 2px;
@@ -94,6 +94,13 @@
             font-size: 14px;
             color: #aaa;
         }
+        .hidden {
+            display: none;
+        }
+        .user-info {
+            margin-left: 20px;
+            color: #fff;
+        }
     </style>
 </head>
 <body>
@@ -103,78 +110,165 @@
             <input type="text" placeholder="Buscar">
             <button>🔍</button>
         </div>
+        <div class="user-info" id="userInfo"></div>
     </header>
-    <form class="upload-form" id="uploadForm">
+
+    <!-- Registro/Login -->
+    <form class="upload-form" id="authForm">
+        <input type="text" id="username" placeholder="Nombre de usuario" required>
+        <input type="password" id="password" placeholder="Contraseña" required>
+        <button type="submit" id="loginBtn">Entrar / Registrarse</button>
+    </form>
+
+    <!-- Subida de archivos -->
+    <form class="upload-form hidden" id="uploadForm">
         <input type="file" id="fileInput" accept="image/*,video/*" required>
         <input type="text" id="titleInput" placeholder="Título" required>
-        <input type="text" id="channelInput" placeholder="Canal" required>
         <button type="submit">Subir</button>
     </form>
+
     <main>
-        <div class="videos" id="videosContainer">
-            <div class="video">
-                <img src="https://i.ytimg.com/vi/ysz5S6PUM-U/hqdefault.jpg" alt="Video 1">
-                <div class="video-info">
-                    <div class="video-title">Video de ejemplo 1</div>
-                    <div class="video-channel">Canal de ejemplo</div>
-                </div>
-            </div>
-            <div class="video">
-                <img src="https://i.ytimg.com/vi/3JZ_D3ELwOQ/hqdefault.jpg" alt="Video 2">
-                <div class="video-info">
-                    <div class="video-title">Video de ejemplo 2</div>
-                    <div class="video-channel">Otro canal</div>
-                </div>
-            </div>
-            <div class="video">
-                <img src="https://i.ytimg.com/vi/LXb3EKWsInQ/hqdefault.jpg" alt="Video 3">
-                <div class="video-info">
-                    <div class="video-title">Video de ejemplo 3</div>
-                    <div class="video-channel">Canal de prueba</div>
-                </div>
-            </div>
-        </div>
+        <div class="videos" id="videosContainer"></div>
     </main>
     <script>
+        // Utilidades de almacenamiento local por usuario
+        function getUsers() {
+            return JSON.parse(localStorage.getItem('users') || '{}');
+        }
+        function saveUsers(users) {
+            localStorage.setItem('users', JSON.stringify(users));
+        }
+        function getCurrentUser() {
+            return localStorage.getItem('currentUser');
+        }
+        function setCurrentUser(username) {
+            localStorage.setItem('currentUser', username);
+        }
+
+        // Manejo de autenticación
+        const authForm = document.getElementById('authForm');
         const uploadForm = document.getElementById('uploadForm');
-        const fileInput = document.getElementById('fileInput');
-        const titleInput = document.getElementById('titleInput');
-        const channelInput = document.getElementById('channelInput');
+        const userInfo = document.getElementById('userInfo');
         const videosContainer = document.getElementById('videosContainer');
 
-        uploadForm.addEventListener('submit', function(e) {
+        function showUser(username) {
+            userInfo.textContent = `Usuario: ${username} | `;
+            const logoutBtn = document.createElement('button');
+            logoutBtn.textContent = 'Cerrar sesión';
+            logoutBtn.style.background = '#cc0000';
+            logoutBtn.style.color = '#fff';
+            logoutBtn.style.border = 'none';
+            logoutBtn.style.borderRadius = '2px';
+            logoutBtn.style.cursor = 'pointer';
+            logoutBtn.onclick = () => {
+                setCurrentUser('');
+                renderAuth();
+            };
+            userInfo.appendChild(logoutBtn);
+        }
+
+        function renderAuth() {
+            const username = getCurrentUser();
+            if (username) {
+                authForm.classList.add('hidden');
+                uploadForm.classList.remove('hidden');
+                showUser(username);
+                renderVideos();
+            } else {
+                authForm.classList.remove('hidden');
+                uploadForm.classList.add('hidden');
+                userInfo.textContent = '';
+                videosContainer.innerHTML = '';
+            }
+        }
+
+        authForm.addEventListener('submit', function(e) {
             e.preventDefault();
-            const file = fileInput.files[0];
-            const title = titleInput.value;
-            const channel = channelInput.value;
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            if (!username || !password) return;
 
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                let mediaElement;
-                if (file.type.startsWith('image/')) {
-                    mediaElement = `<img src="${event.target.result}" alt="${title}">`;
-                } else if (file.type.startsWith('video/')) {
-                    mediaElement = `<video controls src="${event.target.result}"></video>`;
-                } else {
+            let users = getUsers();
+            if (users[username]) {
+                // Login
+                if (users[username].password !== password) {
+                    alert('Contraseña incorrecta');
                     return;
                 }
-
-                const videoDiv = document.createElement('div');
-                videoDiv.className = 'video';
-                videoDiv.innerHTML = `
-                    ${mediaElement}
-                    <div class="video-info">
-                        <div class="video-title">${title}</div>
-                        <div class="video-channel">${channel}</div>
-                    </div>
-                `;
-                videosContainer.prepend(videoDiv);
-                uploadForm.reset();
-            };
-            reader.readAsDataURL(file);
+            } else {
+                // Registro
+                users[username] = { password: password, uploads: [] };
+                saveUsers(users);
+            }
+            setCurrentUser(username);
+            renderAuth();
         });
+
+        // Subida de archivos
+        uploadForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const fileInput = document.getElementById('fileInput');
+            const titleInput = document.getElementById('titleInput');
+            const file = fileInput.files[0];
+            const title = titleInput.value;
+            const username = getCurrentUser();
+
+            if (!file || !title || !username) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('title', title);
+            formData.append('username', username);
+
+            fetch('http://localhost:5000/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.ok) {
+                    uploadForm.reset();
+                    renderVideos();
+                } else {
+                    alert('Error al subir el archivo');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error al subir el archivo');
+            });
+        });
+
+        // Mostrar videos/fotos del usuario
+        function renderVideos() {
+            const username = getCurrentUser();
+            let users = getUsers();
+            videosContainer.innerHTML = '';
+            if (users[username] && users[username].uploads.length > 0) {
+                users[username].uploads.forEach(upload => {
+                    let mediaElement = '';
+                    if (upload.type === 'image') {
+                        mediaElement = `<img src="${upload.src}" alt="${upload.title}">`;
+                    } else if (upload.type === 'video') {
+                        mediaElement = `<video controls src="${upload.src}"></video>`;
+                    }
+                    const videoDiv = document.createElement('div');
+                    videoDiv.className = 'video';
+                    videoDiv.innerHTML = `
+                        ${mediaElement}
+                        <div class="video-info">
+                            <div class="video-title">${upload.title}</div>
+                            <div class="video-channel">${upload.channel}</div>
+                        </div>
+                    `;
+                    videosContainer.appendChild(videoDiv);
+                });
+            }
+        }
+
+        // Inicialización
+        renderAuth();
     </script>
 </body>
 </html>
+pip install flask flask-cors
