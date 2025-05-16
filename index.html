@@ -101,6 +101,39 @@
             margin-left: 20px;
             color: #fff;
         }
+        .profile-pic {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-right: 10px;
+            border: 2px solid #fff;
+        }
+        .user-list {
+            background: #222;
+            margin: 20px auto;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 400px;
+        }
+        .user-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            gap: 10px;
+        }
+        .subscribe-btn {
+            background: #cc0000;
+            color: #fff;
+            border: none;
+            border-radius: 2px;
+            padding: 4px 10px;
+            cursor: pointer;
+        }
+        .subscribed {
+            background: #444;
+            color: #fff;
+        }
     </style>
 </head>
 <body>
@@ -117,6 +150,9 @@
     <form class="upload-form" id="authForm">
         <input type="text" id="username" placeholder="Nombre de usuario" required>
         <input type="password" id="password" placeholder="Contraseña" required>
+        <label>Foto de perfil:
+            <input type="file" id="profilePicInput" accept="image/*">
+        </label>
         <button type="submit" id="loginBtn">Entrar / Registrarse</button>
     </form>
 
@@ -126,6 +162,9 @@
         <input type="text" id="titleInput" placeholder="Título" required>
         <button type="submit">Subir</button>
     </form>
+
+    <!-- Lista de usuarios para suscribirse -->
+    <div class="user-list hidden" id="userList"></div>
 
     <main>
         <div class="videos" id="videosContainer"></div>
@@ -150,9 +189,17 @@
         const uploadForm = document.getElementById('uploadForm');
         const userInfo = document.getElementById('userInfo');
         const videosContainer = document.getElementById('videosContainer');
+        const userList = document.getElementById('userList');
+        const profilePicInput = document.getElementById('profilePicInput');
 
         function showUser(username) {
-            userInfo.textContent = `Usuario: ${username} | `;
+            const users = getUsers();
+            userInfo.innerHTML = '';
+            let img = '';
+            if (users[username] && users[username].profilePic) {
+                img = `<img class="profile-pic" src="${users[username].profilePic}" alt="Perfil">`;
+            }
+            userInfo.innerHTML = `${img}Usuario: ${username} | `;
             const logoutBtn = document.createElement('button');
             logoutBtn.textContent = 'Cerrar sesión';
             logoutBtn.style.background = '#cc0000';
@@ -172,11 +219,14 @@
             if (username) {
                 authForm.classList.add('hidden');
                 uploadForm.classList.remove('hidden');
+                userList.classList.remove('hidden');
                 showUser(username);
                 renderVideos();
+                renderUserList();
             } else {
                 authForm.classList.remove('hidden');
                 uploadForm.classList.add('hidden');
+                userList.classList.add('hidden');
                 userInfo.textContent = '';
                 videosContainer.innerHTML = '';
             }
@@ -186,6 +236,8 @@
             e.preventDefault();
             const username = document.getElementById('username').value.trim();
             const password = document.getElementById('password').value;
+            const profilePicFile = profilePicInput.files[0];
+
             if (!username || !password) return;
 
             let users = getUsers();
@@ -197,9 +249,25 @@
                 }
             } else {
                 // Registro
-                users[username] = { password: password, uploads: [] };
-                saveUsers(users);
+                users[username] = { 
+                    password: password, 
+                    uploads: [], 
+                    profilePic: '', 
+                    subscriptions: [] 
+                };
+                if (profilePicFile) {
+                    const reader = new FileReader();
+                    reader.onload = function(event) {
+                        users[username].profilePic = event.target.result;
+                        saveUsers(users);
+                        setCurrentUser(username);
+                        renderAuth();
+                    };
+                    reader.readAsDataURL(profilePicFile);
+                    return;
+                }
             }
+            saveUsers(users);
             setCurrentUser(username);
             renderAuth();
         });
@@ -215,55 +283,122 @@
 
             if (!file || !title || !username) return;
 
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('title', title);
-            formData.append('username', username);
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                let type = '';
+                if (file.type.startsWith('image/')) type = 'image';
+                else if (file.type.startsWith('video/')) type = 'video';
+                else return;
 
-            fetch('http://localhost:5000/upload', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.ok) {
-                    uploadForm.reset();
-                    renderVideos();
-                } else {
-                    alert('Error al subir el archivo');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Error al subir el archivo');
-            });
+                let users = getUsers();
+                users[username].uploads.unshift({
+                    type: type,
+                    src: event.target.result,
+                    title: title,
+                    channel: username
+                });
+                saveUsers(users);
+                renderVideos();
+                uploadForm.reset();
+            };
+            reader.readAsDataURL(file);
         });
 
-        // Mostrar videos/fotos del usuario
+        // Mostrar videos/fotos de todos los usuarios
         function renderVideos() {
-            const username = getCurrentUser();
             let users = getUsers();
             videosContainer.innerHTML = '';
+            // Mostrar primero los videos de los usuarios a los que estoy suscrito
+            const username = getCurrentUser();
+            let mySubs = [];
+            if (users[username] && users[username].subscriptions) {
+                mySubs = users[username].subscriptions;
+            }
+            // Mostrar videos de suscripciones primero
+            mySubs.forEach(sub => {
+                if (users[sub] && users[sub].uploads.length > 0) {
+                    users[sub].uploads.forEach(upload => {
+                        addVideoToContainer(upload, users[sub].profilePic, sub, true);
+                    });
+                }
+            });
+            // Luego mostrar los de todos los usuarios (sin repetir)
+            Object.keys(users).forEach(user => {
+                if (user === username || mySubs.includes(user)) return;
+                if (users[user].uploads.length > 0) {
+                    users[user].uploads.forEach(upload => {
+                        addVideoToContainer(upload, users[user].profilePic, user, false);
+                    });
+                }
+            });
+            // Finalmente, mostrar los míos
             if (users[username] && users[username].uploads.length > 0) {
                 users[username].uploads.forEach(upload => {
-                    let mediaElement = '';
-                    if (upload.type === 'image') {
-                        mediaElement = `<img src="${upload.src}" alt="${upload.title}">`;
-                    } else if (upload.type === 'video') {
-                        mediaElement = `<video controls src="${upload.src}"></video>`;
-                    }
-                    const videoDiv = document.createElement('div');
-                    videoDiv.className = 'video';
-                    videoDiv.innerHTML = `
-                        ${mediaElement}
-                        <div class="video-info">
-                            <div class="video-title">${upload.title}</div>
-                            <div class="video-channel">${upload.channel}</div>
-                        </div>
-                    `;
-                    videosContainer.appendChild(videoDiv);
+                    addVideoToContainer(upload, users[username].profilePic, username, false, true);
                 });
             }
+        }
+
+        function addVideoToContainer(upload, profilePic, channel, isSubscribed, isOwn = false) {
+            let mediaElement = '';
+            if (upload.type === 'image') {
+                mediaElement = `<img src="${upload.src}" alt="${upload.title}">`;
+            } else if (upload.type === 'video') {
+                mediaElement = `<video controls src="${upload.src}"></video>`;
+            }
+            let pic = profilePic ? `<img class="profile-pic" src="${profilePic}" alt="Perfil">` : '';
+            let channelHtml = `<div class="video-channel">${pic}${channel}${isOwn ? ' (Tú)' : ''}${isSubscribed ? ' <span style="color:#0f0;">(Suscrito)</span>' : ''}</div>`;
+            const videoDiv = document.createElement('div');
+            videoDiv.className = 'video';
+            videoDiv.innerHTML = `
+                ${mediaElement}
+                <div class="video-info">
+                    <div class="video-title">${upload.title}</div>
+                    ${channelHtml}
+                </div>
+            `;
+            videosContainer.appendChild(videoDiv);
+        }
+
+        // Mostrar lista de usuarios para suscribirse
+        function renderUserList() {
+            let users = getUsers();
+            const username = getCurrentUser();
+            userList.innerHTML = '<h3>Usuarios</h3>';
+            Object.keys(users).forEach(user => {
+                if (user === username) return;
+                let isSubscribed = users[username].subscriptions && users[username].subscriptions.includes(user);
+                let pic = users[user].profilePic ? `<img class="profile-pic" src="${users[user].profilePic}" alt="Perfil">` : '';
+                const div = document.createElement('div');
+                div.className = 'user-item';
+                div.innerHTML = `
+                    ${pic}
+                    <span>${user}</span>
+                    <button class="subscribe-btn ${isSubscribed ? 'subscribed' : ''}" data-user="${user}">
+                        ${isSubscribed ? 'Suscrito' : 'Suscribirse'}
+                    </button>
+                `;
+                userList.appendChild(div);
+            });
+
+            // Botones de suscripción
+            userList.querySelectorAll('.subscribe-btn').forEach(btn => {
+                btn.onclick = function() {
+                    const targetUser = btn.getAttribute('data-user');
+                    let users = getUsers();
+                    if (!users[username].subscriptions) users[username].subscriptions = [];
+                    if (users[username].subscriptions.includes(targetUser)) {
+                        // Desuscribir
+                        users[username].subscriptions = users[username].subscriptions.filter(u => u !== targetUser);
+                    } else {
+                        // Suscribir
+                        users[username].subscriptions.push(targetUser);
+                    }
+                    saveUsers(users);
+                    renderUserList();
+                    renderVideos();
+                };
+            });
         }
 
         // Inicialización
@@ -271,4 +406,3 @@
     </script>
 </body>
 </html>
-pip install flask flask-cors
